@@ -1,0 +1,38 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+    <title>Case Details</title>
+    <!-- ...existing code... -->
+</head>
+
+<body>
+    <h2>Case Details</h2>
+    <table border="1">
+        <tr>
+            <th>Parties</th>
+            <td>{{details.parties}}</td>
+        </tr>
+        <tr>
+            <th>Filing Date</th>
+            <td>{{details.filing_date}}</td>
+        </tr>
+        <tr>
+            <th>Next Hearing</th>
+            <td>{{details.next_hearing}}</td>
+        </tr>
+        <tr>
+            <th>Latest Order/Judgment</th>
+            <td>
+                {% if details.pdf_url %}
+                <a href="{{details.pdf_url}}" target="_blank">Download PDF</a>
+                {% else %}
+                No PDF found
+                {% endif %}
+            </td>
+        </tr>
+    </table>
+    <a href="{{ url_for('index') }}">Search Again</a>
+</body>
+
+</html>

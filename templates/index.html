@@ -1,0 +1,165 @@
+<!DOCTYPE html>
+<html lang="en" class="bg-gray-50 dark:bg-gray-900">
+
+<head>
+    <meta charset="UTF-8">
+    <title>Court Data Fetcher & Mini Dashboard</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <!-- Tailwind CSS CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Heroicons CDN for icons -->
+    <script src="https://unpkg.com/feather-icons"></script>
+</head>
+
+<body class="min-h-screen flex items-center justify-center transition-colors duration-300 bg-gray-50 dark:bg-gray-900">
+    <div class="absolute top-6 right-6 flex items-center gap-4 z-10">
+        <button id="darkModeToggle" aria-label="Toggle dark mode"
+            class="p-2 rounded-full bg-gray-200 dark:bg-gray-700 hover:bg-gray-300 dark:hover:bg-gray-600 transition">
+            <svg id="darkIcon" xmlns="http://www.w3.org/2000/svg"
+                class="h-6 w-6 text-gray-700 dark:text-gray-200" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path id="moonIcon" stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                    d="M21 12.79A9 9 0 1111.21 3a7 7 0 109.79 9.79z" />
+            </svg>
+        </button>
+    </div>
+    <main class="w-full max-w-2xl mx-auto p-4 md:p-8 bg-white dark:bg-gray-800 rounded-xl shadow-2xl transition-colors duration-300">
+        <header class="mb-8 text-center">
+            <h1 class="text-3xl md:text-4xl font-extrabold text-gray-800 dark:text-gray-100 tracking-tight">Court Data
+                Fetcher & Mini Dashboard</h1>
+        </header>
+        <section aria-label="Search Form" class="mb-8">
+            <form id="caseForm"
+                class="bg-gray-100 dark:bg-gray-700 rounded-lg shadow p-6 space-y-6"
+                autocomplete="off" novalidate>
+                <div>
+                    <label for="caseType"
+                        class="block text-sm font-semibold text-gray-700 dark:text-gray-200 mb-1">Case Type</label>
+                    <select id="caseType" name="caseType" required
+                        class="w-full rounded-md border-gray-300 dark:border-gray-600 shadow-sm focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-800 dark:text-gray-100">
+                        <option value="">Select Case Type</option>
+                        <option value="W.P.(C)">W.P.(C)</option>
+                        <option value="Crl.M.C.">Crl.M.C.</option>
+                        <option value="FAO">FAO</option>
+                        <option value="RSA">RSA</option>
+                        <option value="CRL.A.">CRL.A.</option>
+                        <option value="CS(OS)">CS(OS)</option>
+                    </select>
+                </div>
+                <div>
+                    <label for="caseNumber"
+                        class="block text-sm font-semibold text-gray-700 dark:text-gray-200 mb-1">Case Number</label>
+                    <input type="number" id="caseNumber" name="caseNumber" required min="1"
+                        class="w-full rounded-md border-gray-300 dark:border-gray-600 shadow-sm focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-800 dark:text-gray-100"
+                        placeholder="Enter case number">
+                </div>
+                <div>
+                    <label for="filingYear"
+                        class="block text-sm font-semibold text-gray-700 dark:text-gray-200 mb-1">Filing Year</label>
+                    <input type="number" id="filingYear" name="filingYear" required min="1900" max="2099"
+                        class="w-full rounded-md border-gray-300 dark:border-gray-600 shadow-sm focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-800 dark:text-gray-100"
+                        placeholder="YYYY">
+                </div>
+                <div class="flex items-center gap-4">
+                    <button type="submit" id="submitBtn" disabled
+                        class="flex-1 py-2 px-4 bg-blue-600 text-white font-semibold rounded-md shadow hover:bg-blue-700 transition duration-150 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 flex items-center justify-center gap-2 disabled:opacity-60 disabled:cursor-not-allowed">
+                        <span id="btnText">Fetch Case Data</span>
+                        <svg id="loadingSpinner" class="h-5 w-5 animate-spin hidden" xmlns="http://www.w3.org/2000/svg"
+                            fill="none" viewBox="0 0 24 24">
+                            <circle class="opacity-25" cx="12" cy="12" r="10" stroke="white" stroke-width="4" />
+                            <path class="opacity-75" fill="white" d="M4 12a8 8 0 018-8v8z" />
+                        </svg>
+                    </button>
+                    <button type="button" id="resetBtn"
+                        class="py-2 px-4 bg-gray-200 dark:bg-gray-600 text-gray-700 dark:text-gray-100 font-semibold rounded-md shadow hover:bg-gray-300 dark:hover:bg-gray-500 transition duration-150 focus:outline-none focus:ring-2 focus:ring-gray-400 focus:ring-offset-2">
+                        Reset Search
+                    </button>
+                </div>
+            </form>
+        </section>
+        <section id="offlineMsg" class="hidden mb-4">
+            <div class="bg-yellow-100 dark:bg-yellow-900 border border-yellow-400 text-yellow-800 dark:text-yellow-200 px-4 py-3 rounded relative"
+                role="alert">
+                <span class="block font-bold">Offline:</span>
+                <span>You are currently offline. Please check your internet connection.</span>
+            </div>
+        </section>
+        <section id="errorMsg" class="hidden mb-4">
+            <div class="bg-red-100 dark:bg-red-900 border border-red-400 text-red-700 dark:text-red-200 px-4 py-3 rounded relative"
+                role="alert">
+                <span class="block font-bold">Error:</span>
+                <span id="errorText"></span>
+            </div>
+        </section>
+        <section id="skeletonLoader" class="hidden mb-8">
+            <!-- Skeleton loader for results -->
+            <div class="animate-pulse grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div class="bg-gray-200 dark:bg-gray-700 rounded-lg p-5 h-48"></div>
+                <div class="bg-gray-200 dark:bg-gray-700 rounded-lg p-5 h-48"></div>
+            </div>
+        </section>
+        <section id="results" class="hidden mb-4" aria-live="polite">
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div id="caseCard"
+                    class="bg-white dark:bg-gray-800 rounded-lg p-5 shadow transition-all duration-500 opacity-0 translate-y-4">
+                    <h2 class="text-lg font-semibold text-gray-800 dark:text-gray-100 mb-3">Case Details</h2>
+                    <div class="space-y-2">
+                        <div><span class="font-medium text-gray-700 dark:text-gray-200">Petitioner:</span> <span
+                                id="petitioner">John Doe</span></div>
+                        <div><span class="font-medium text-gray-700 dark:text-gray-200">Respondent:</span> <span
+                                id="respondent">Jane Smith</span></div>
+                        <div><span class="font-medium text-gray-700 dark:text-gray-200">Filing Date:</span> <span
+                                id="filingDate">2022-01-15</span></div>
+                        <div><span class="font-medium text-gray-700 dark:text-gray-200">Next Hearing Date:</span> <span
+                                id="nextHearing">2023-06-10</span></div>
+                    </div>
+                </div>
+                <div id="ordersCard"
+                    class="bg-white dark:bg-gray-800 rounded-lg p-5 shadow transition-all duration-500 opacity-0 translate-y-4 flex flex-col justify-between">
+                    <h2 class="text-lg font-semibold text-gray-800 dark:text-gray-100 mb-3">Recent Orders / Judgments</h2>
+                    <ul id="ordersList" class="space-y-3">
+                        <!-- Demo PDF links -->
+                        <li class="flex items-center justify-between">
+                            <span class="text-gray-700 dark:text-gray-200">Order #1</span>
+                            <a href="#" target="_blank"
+                                class="ml-2 text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-200 transition flex items-center gap-1"
+                                aria-label="Download PDF">
+                                <i data-feather="download" class="w-5 h-5"></i>
+                            </a>
+                        </li>
+                        <li class="flex items-center justify-between">
+                            <span class="text-gray-700 dark:text-gray-200">Order #2</span>
+                            <a href="#" target="_blank"
+                                class="ml-2 text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-200 transition flex items-center gap-1"
+                                aria-label="Download PDF">
+                                <i data-feather="download" class="w-5 h-5"></i>
+                            </a>
+                        </li>
+                        <li class="flex items-center justify-between">
+                            <span class="text-gray-700 dark:text-gray-200">Order #3</span>
+                            <a href="#" target="_blank"
+                                class="ml-2 text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-200 transition flex items-center gap-1"
+                                aria-label="Download PDF">
+                                <i data-feather="download" class="w-5 h-5"></i>
+                            </a>
+                        </li>
+                    </ul>
+                    <nav id="pagination" class="mt-4 flex justify-end gap-2">
+                        <button id="prevPage"
+                            class="px-3 py-1 rounded bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-100 hover:bg-gray-300 dark:hover:bg-gray-600 transition disabled:opacity-50"
+                            disabled>Prev</button>
+                        <button id="nextPage"
+                            class="px-3 py-1 rounded bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-100 hover:bg-gray-300 dark:hover:bg-gray-600 transition">
+                            Next
+                        </button>
+                    </nav>
+                </div>
+            </div>
+        </section>
+    </main>
+    <script src="{{ url_for('static', filename='main.js') }}"></script>
+    <script>
+        feather.replace();
+    </script>
+</body>
+
+</html>
