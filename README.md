@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 # Delhi High Court Case Fetcher
 
 ## Chosen Court
@@ -31,3 +32,6 @@ Each search is logged with query and raw HTML response in SQLite.
 
 ## License
 MIT
+=======
+# court-data-fetcher
+>>>>>>> 4bd29c8a6351afeeff9df5ee5e1974861cf5e5f8
