@@ -196,8 +196,8 @@ document.addEventListener("DOMContentLoaded", () => {
     resetBtn.addEventListener("click", resetAll);
 
     // Pagination demo (no backend yet)
-    prevPage.addEventListener("click", () => {});
-    nextPage.addEventListener("click", () => {});
+    prevPage.addEventListener("click", () => { });
+    nextPage.addEventListener("click", () => { });
 
     // Show demo data on load for preview
     window.addEventListener("DOMContentLoaded", () => {

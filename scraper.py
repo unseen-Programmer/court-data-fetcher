@@ -1,73 +1,89 @@
-import time
+import logging
+import os
+import random
 from playwright.sync_api import sync_playwright, TimeoutError as PlaywrightTimeoutError
 
-def fetch_case_details(case_type: str, case_number: str, filing_year: str):
-    url = "https://delhihighcourt.nic.in/case.asp"
+def fetch_case_details(case_type: str, case_number: str, filing_year: str, return_html: bool = False, headless: bool = True):
+    """
+    Robustly fetches case details from the Delhi High Court website using Playwright.
+    Adds random delays, longer timeouts, and logs all steps and errors.
+
+    Args:
+        case_type (str): The case type (e.g., "W.P.(C)").
+        case_number (str): The case number.
+        filing_year (str): The filing year.
+        return_html (bool): If True, also return the raw HTML of the result page.
+        headless (bool): Whether to run the browser in headless mode.
+
+    Returns:
+        dict: Dictionary with case details (petitioner, respondent, filing_date, next_hearing, pdf_url).
+        str (optional): Raw HTML if return_html is True.
+    """
+    url = "https://delhihighcourt.nic.in/app/get-case-type-status"
     details = {}
-    with sync_playwright() as p:
-        browser = p.chromium.launch(headless=False)  # Set to True in production
-        page = browser.new_page()
-        try:
+    html = ""
+    try:
+        with sync_playwright() as p:
+            browser = p.chromium.launch(headless=headless)
+            page = browser.new_page()
+            logging.info(f"Navigating to {url}")
             page.goto(url)
-            # 2. Wait for the case search form to load
-            page.wait_for_selector("select[name='CaseType']", timeout=10000)
-            page.wait_for_selector("input[name='CaseNo']", timeout=10000)
-            page.wait_for_selector("input[name='CaseYear']", timeout=10000)
-            page.wait_for_selector("input[type='submit']", timeout=10000)
+            page.wait_for_load_state('networkidle')
+            page.wait_for_timeout(random.uniform(1000, 4000))
 
-            # 3. Select the given case type by label
+            page.wait_for_selector("select[name='CaseType']", timeout=20000)
+            page.wait_for_selector("input[name='CaseNo']", timeout=20000)
+            page.wait_for_selector("input[name='CaseYear']", timeout=20000)
+            page.wait_for_selector("input[type='submit']", timeout=20000)
+
+            page.wait_for_timeout(random.uniform(1000, 2000))
             page.select_option("select[name='CaseType']", label=case_type)
-
-            # 4. Enter the given case number and filing year
+            page.wait_for_timeout(random.uniform(1000, 2000))
             page.fill("input[name='CaseNo']", case_number)
             page.fill("input[name='CaseYear']", filing_year)
-
-            # 5. Click the submit button to search
+            page.wait_for_timeout(random.uniform(1000, 2000))
             page.click("input[type='submit']")
 
-            # 6. Wait for the results iframe named "frmCaseStatus" to appear
-            page.wait_for_selector("iframe[name='frmCaseStatus']", timeout=20000)
+            page.wait_for_load_state('networkidle')
+            page.wait_for_timeout(3000)
 
-            # 7. Switch context to that iframe
+            page.wait_for_selector("iframe[name='frmCaseStatus']", timeout=20000)
             frame = page.frame(name="frmCaseStatus")
             if not frame:
                 raise Exception("Results iframe not found.")
 
-            # 8. Wait for the case details table to load inside the iframe
             frame.wait_for_selector("table", timeout=20000)
+            html = frame.content()
 
-            # 9. Extract details
-            # Petitioner and Respondent names
-            petitioner = None
-            respondent = None
+            # Extract details
             try:
                 petitioner_elem = frame.query_selector("td:has-text('Petitioner')")
                 respondent_elem = frame.query_selector("td:has-text('Respondent')")
                 petitioner = petitioner_elem.evaluate("el => el.nextElementSibling.innerText") if petitioner_elem else "Not found"
                 respondent = respondent_elem.evaluate("el => el.nextElementSibling.innerText") if respondent_elem else "Not found"
-            except Exception:
-                petitioner = "Not found"
-                respondent = "Not found"
+            except Exception as e:
+                logging.warning(f"Error extracting parties: {e}")
+                petitioner = respondent = "Error"
 
-            # Filing Date
             try:
                 filing_elem = frame.query_selector("td:has-text('Filing Date')")
                 filing_date = filing_elem.evaluate("el => el.nextElementSibling.innerText") if filing_elem else "Not found"
-            except Exception:
-                filing_date = "Not found"
+            except Exception as e:
+                logging.warning(f"Error extracting filing date: {e}")
+                filing_date = "Error"
 
-            # Next Hearing Date
             try:
                 next_elem = frame.query_selector("td:has-text('Next Date')")
                 next_hearing = next_elem.evaluate("el => el.nextElementSibling.innerText") if next_elem else "Not found"
-            except Exception:
-                next_hearing = "Not found"
+            except Exception as e:
+                logging.warning(f"Error extracting next hearing: {e}")
+                next_hearing = "Error"
 
-            # Most recent PDF order/judgment link
             try:
                 pdf_link_elem = frame.query_selector("a[href$='.pdf']")
                 pdf_url = pdf_link_elem.get_attribute("href") if pdf_link_elem else None
-            except Exception:
+            except Exception as e:
+                logging.warning(f"Error extracting PDF link: {e}")
                 pdf_url = None
 
             details = {
@@ -77,25 +93,31 @@ def fetch_case_details(case_type: str, case_number: str, filing_year: str):
                 "next_hearing": next_hearing,
                 "pdf_url": pdf_url
             }
-
-        except PlaywrightTimeoutError as e:
-            print("Timeout error:", e)
-            details = {
-                "petitioner": "Timeout",
-                "respondent": "Timeout",
-                "filing_date": "Timeout",
-                "next_hearing": "Timeout",
-                "pdf_url": None
-            }
-        except Exception as e:
-            print("Error:", e)
-            details = {
-                "petitioner": "Error",
-                "respondent": "Error",
-                "filing_date": "Error",
-                "next_hearing": "Error",
-                "pdf_url": None
-            }
-        finally:
+            logging.info(f"Extracted details: {details}")
+            if details["petitioner"] == "Error":
+                logs_dir = os.path.join(os.path.dirname(__file__), 'logs')
+                if not os.path.exists(logs_dir):
+                    os.makedirs(logs_dir)
+                with open(os.path.join(logs_dir, "last_failed_html.html"), "w", encoding="utf-8") as f:
+                    f.write(html)
             browser.close()
-    return details
+            if return_html:
+                return details, html
+            return details
+    except Exception as e:
+        logging.error(f"Scraper error: {e}")
+        # Ensure logs directory exists and save last html if available
+        if html:
+            logs_dir = os.path.join(os.path.dirname(__file__), 'logs')
+            if not os.path.exists(logs_dir):
+                os.makedirs(logs_dir)
+            with open(os.path.join(logs_dir, "last_failed_html.html"), "w", encoding="utf-8") as f:
+                f.write(html)
+        return {
+            "petitioner": "Error",
+            "respondent": "Error",
+            "filing_date": "Error",
+            "next_hearing": "Error",
+            "pdf_url": None,
+            "status": "Scraping failed."
+        }

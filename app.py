@@ -1,14 +1,35 @@
 import os
 import sqlite3
-from flask import Flask, render_template, request, redirect, url_for, flash
+from flask import Flask, render_template, request, redirect, url_for, flash, jsonify
 from dotenv import load_dotenv
-from scraper import fetch_case_details
 
 load_dotenv()
+
 DB_PATH = os.getenv("DB_PATH", "search_logs.db")
 
 app = Flask(__name__)
 app.secret_key = os.getenv("SECRET_KEY", "supersecret")
+
+
+# --- API route for frontend fetch() ---
+@app.route("/fetch-case", methods=["POST"])
+def fetch_case_api():
+    data = request.get_json(force=True)
+    case_type = data.get("case_type", "").strip()
+    case_number = data.get("case_number", "").strip()
+    filing_year = data.get("filing_year", "").strip()
+
+    if not case_type or not case_number or not filing_year:
+        return jsonify({"error": "All fields are required."}), 400
+
+    try:
+        details = fetch_case_details(case_type, case_number, filing_year)
+        if not details or details.get("petitioner") in ("Error", "Timeout"):
+            return jsonify({"error": "No case found or invalid details."}), 404
+        return jsonify(details)
+    except Exception as e:
+        return jsonify({"error": f"Error fetching data: {str(e)}"}), 500
+
 
 def log_search(case_type, case_number, filing_year, raw_response):
     conn = sqlite3.connect(DB_PATH)
@@ -30,28 +51,45 @@ def log_search(case_type, case_number, filing_year, raw_response):
     conn.commit()
     conn.close()
 
+
 @app.route("/", methods=["GET", "POST"])
 def index():
     case_types = ["W.P.(C)", "Crl.M.C.", "FAO", "RSA", "CRL.A.", "CS(OS)"]  # Example types
+
     if request.method == "POST":
         case_type = request.form.get("case_type", "").strip()
         case_number = request.form.get("case_number", "").strip()
         filing_year = request.form.get("filing_year", "").strip()
-        # Basic input validation
+
         if not case_type or not case_number or not filing_year:
             flash("All fields are required.", "danger")
             return render_template("index.html", case_types=case_types)
+
         try:
-            details, raw_html = fetch_case_details(case_type, case_number, filing_year)
+            result = fetch_case_details(case_type, case_number, filing_year, return_html=True)
+
+            if isinstance(result, tuple):
+                details, raw_html = result
+            else:
+                details = result
+                raw_html = ""
+
             if not details:
                 flash("No case found or invalid details.", "warning")
                 return render_template("index.html", case_types=case_types)
+
             log_search(case_type, case_number, filing_year, raw_html)
             return render_template("result.html", details=details)
+
         except Exception as e:
             flash(f"Error fetching data: {str(e)}", "danger")
             return render_template("index.html", case_types=case_types)
+
     return render_template("index.html", case_types=case_types)
+
+
+# --- Import scraper at the end to avoid circular imports ---
+from scraper import fetch_case_details
 
 if __name__ == "__main__":
     app.run(debug=True)
